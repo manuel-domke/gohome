@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
-	"syscall"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin"
@@ -14,34 +16,57 @@ var (
 	prmPause     int
 )
 
-func getStartTime() time.Time {
-	if len(prmStartTime) == 0 {
-		si := &syscall.Sysinfo_t{}
-		syscall.Sysinfo(si)
-		return time.Now().Add(time.Duration(-si.Uptime) * time.Second)
+func getFirstSyslogEntry() (time.Time, error) {
+	var startTime time.Time
+
+	syslog, err := os.Open("/var/log/syslog")
+	if err != nil {
+		return time.Time{}, fmt.Errorf("could not read /var/log/syslog")
 	}
 
+	scanner := bufio.NewScanner(syslog)
+
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "Nov 22") {
+			dateTokens := strings.SplitN(scanner.Text(), ":", 3)
+			dateString := strings.Join(dateTokens[:2], " ")
+			startTime, err = time.Parse("Jan 2 15 04", dateString)
+			if err != nil {
+				break
+			}
+
+			_, m, d := startTime.Date()
+			startTime = time.Date(time.Now().Year(), m, d, startTime.Hour(), startTime.Minute(), 0, 0, time.Local)
+
+			return startTime, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("could not parse time in syslog")
+}
+
+func parseGivenTime() (time.Time, error) {
 	givenTime, err := time.Parse("15:04", prmStartTime)
 	if err != nil {
-		log.Fatal("could not parse start time, use format hh:mm")
+		return time.Time{}, fmt.Errorf("given time not in format hh:mm")
 	}
 
 	y, m, d := time.Now().Date()
-	startTime := time.Date(y, m, d, givenTime.Hour(), givenTime.Minute(), 0, 0, time.Local)
+	return time.Date(y, m, d, givenTime.Hour(), givenTime.Minute(), 0, 0, time.Local), nil
+}
 
-	wasYesterday := false
+func getStartTime() time.Time {
+	var startTime time.Time
+	var err error
 
-	if givenTime.Hour() > time.Now().Hour() {
-		wasYesterday = true
+	if len(prmStartTime) == 0 {
+		startTime, err = getFirstSyslogEntry()
+	} else {
+		startTime, err = parseGivenTime()
 	}
 
-	if givenTime.Hour() == time.Now().Hour() &&
-		givenTime.Minute() > time.Now().Minute() {
-		wasYesterday = true
-	}
-
-	if wasYesterday {
-		startTime = startTime.Add(time.Duration(-24) * time.Hour)
+	if err != nil {
+		log.Fatalf("unable to get start time: %s", err)
 	}
 
 	return startTime
