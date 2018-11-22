@@ -63,8 +63,8 @@ func main() {
 	goHomeAt := startTime.Add(time.Duration(8) * time.Hour).Add(time.Duration(prmPause) * time.Minute)
 	goHomeIn := time.Until(goHomeAt)
 
-	fmt.Printf("started at %s\n", startTime.Format("15:04:05"))
-	fmt.Printf("day complete at %s\n", goHomeAt.Format("15:04:05"))
+	fmt.Printf("started at %s\n", startTime.Format("15:04"))
+	fmt.Printf("day complete at %s (with %d min. break)\n", goHomeAt.Format("15:04"), prmPause)
 
 	if goHomeIn.Minutes() >= 0 {
 		fmt.Printf("that is in %.f minutes\n", goHomeIn.Minutes())
