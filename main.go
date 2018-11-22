@@ -71,4 +71,11 @@ func main() {
 	} else {
 		fmt.Printf("that was %.f minutes ago\n", goHomeIn.Minutes()*-1)
 	}
+
+	if prmPause < 45 {
+		prmPause = 45
+	}
+
+	goHomeLatest := startTime.Add(time.Duration(10) * time.Hour).Add(time.Duration(prmPause) * time.Minute)
+	fmt.Printf("leave latest at %s\n", goHomeLatest.Format("15:04"))
 }
