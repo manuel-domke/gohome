@@ -50,7 +50,7 @@ func getStartTime() time.Time {
 func main() {
 	log.SetFlags(0)
 	kingpin.Flag("start", "start time (hh:mm)").Short('s').StringVar(&prmStartTime)
-	kingpin.Flag("pause", "duration of breaks").Short('p').Default("30").IntVar(&prmPause)
+	kingpin.Flag("pause", "duration of break(s)").Short('p').Default("60").IntVar(&prmPause)
 	kingpin.CommandLine.HelpFlag.Hidden()
 	kingpin.Parse()
 
