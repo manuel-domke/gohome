@@ -27,7 +27,7 @@ func getFirstSyslogEntry() (time.Time, error) {
 	scanner := bufio.NewScanner(syslog)
 
 	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), "Nov 22") {
+		if strings.Contains(scanner.Text(), time.Now().Format("Jan 2")) {
 			dateTokens := strings.SplitN(scanner.Text(), ":", 3)
 			dateString := strings.Join(dateTokens[:2], " ")
 			startTime, err = time.Parse("Jan 2 15 04", dateString)
