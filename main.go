@@ -35,8 +35,9 @@ func getFirstSyslogEntry() (time.Time, error) {
 				break
 			}
 
-			_, m, d := startTime.Date()
-			startTime = time.Date(time.Now().Year(), m, d, startTime.Hour(), startTime.Minute(), 0, 0, time.Local)
+			startTime = time.Date(
+				time.Now().Year(), startTime.Month(), startTime.Day(),
+				startTime.Hour(), startTime.Minute(), 0, 0, time.Local)
 
 			return startTime, nil
 		}
