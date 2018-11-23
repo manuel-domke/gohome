@@ -16,6 +16,7 @@ import (
 var (
 	prmStartTime string
 	prmPause     int
+	prmOffset    int
 )
 
 func getFirstSyslogEntry() (time.Time, error) {
@@ -78,19 +79,19 @@ func getStartTime() time.Time {
 func main() {
 	log.SetFlags(0)
 	kingpin.Flag("start", "start time (hh:mm)").Short('s').StringVar(&prmStartTime)
-	kingpin.Flag("pause", "duration of break(s)").Short('p').Default("60").IntVar(&prmPause)
+	kingpin.Flag("pause", "duration of break(s) in min.").Short('p').Default("60").IntVar(&prmPause)
+	kingpin.Flag("offset", "time you need from door to booting your pc in min.").Short('o').Default("5").IntVar(&prmOffset)
 	kingpin.CommandLine.HelpFlag.Hidden()
 	kingpin.Parse()
-
-	startTime := getStartTime()
 
 	if prmPause < 30 {
 		prmPause = 30
 	}
 
-	goHomeAt := startTime.Add(time.Duration(8) * time.Hour).Add(time.Duration(prmPause) * time.Minute)
+	startTime := getStartTime().Add(time.Duration(prmOffset*-1) * time.Minute)
+	goHomeAt := startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
 	goHomeIn := time.Until(goHomeAt)
-	goHomeLatest := startTime.Add(time.Duration(10) * time.Hour).Add(time.Duration(max(45, prmPause)) * time.Minute)
+	goHomeLatest := startTime.Add(10 * time.Hour).Add(max(45, prmPause) * time.Minute)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 	defer w.Flush()
@@ -107,10 +108,10 @@ func main() {
 	fmt.Fprintf(w, "leave latest at\t %s!\n", c.Red(goHomeLatest.Format("15:04")))
 }
 
-func max(a, b int) int {
+func max(a, b int) time.Duration {
 	if a > b {
-		return a
+		return time.Duration(a)
 	}
 
-	return b
+	return time.Duration(b)
 }
