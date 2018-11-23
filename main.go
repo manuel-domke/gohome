@@ -58,9 +58,8 @@ func parseGivenTime() time.Time {
 		log.Fatal("given time is not in format hh:mm")
 	}
 
-	y, m, d := time.Now().Date()
 	return time.Date(
-		y, m, d,
+		time.Now().Year(), time.Now().Month(), time.Now().Day(),
 		givenTime.Hour(), givenTime.Minute(), 0,
 		0, time.Local,
 	)
@@ -154,13 +153,18 @@ func main() {
 	)
 
 	if goHomeIn.Minutes() >= 0 {
-		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Bold(c.Green(goHomeIn.Minutes())))
+		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Bold(c.Cyan(goHomeIn.Minutes())))
 	} else {
 		fmt.Fprintf(w, "...that was\t %.f min ago\n", c.Bold(c.Green(goHomeIn.Minutes()*-1)))
 	}
 
 	fmt.Fprintf(w, "\nleave latest at\t %s\n", c.Red(goHomeLatest.Format("15:04")))
-	fmt.Fprintf(w, "...that's in\t %.f min\n", c.Red(goLatestIn.Minutes()))
+
+	if goLatestIn.Minutes() >= 0 {
+		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Red(goLatestIn.Minutes()))
+	} else {
+		fmt.Fprintf(w, "...that was\t %.f min ago\n", c.Bold(c.Red(goLatestIn.Minutes()*-1)))
+	}
 }
 
 func longer(a, b int) time.Duration {
