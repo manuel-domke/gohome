@@ -6,9 +6,11 @@ import (
 	"log"
 	"os"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/alecthomas/kingpin"
+	c "github.com/logrusorgru/aurora"
 )
 
 var (
@@ -88,20 +90,27 @@ func main() {
 
 	goHomeAt := startTime.Add(time.Duration(8) * time.Hour).Add(time.Duration(prmPause) * time.Minute)
 	goHomeIn := time.Until(goHomeAt)
+	goHomeLatest := startTime.Add(time.Duration(10) * time.Hour).Add(time.Duration(max(45, prmPause)) * time.Minute)
 
-	fmt.Printf("started at %s\n", startTime.Format("15:04"))
-	fmt.Printf("day complete at %s (with %d min. break)\n", goHomeAt.Format("15:04"), prmPause)
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
+	defer w.Flush()
+
+	fmt.Fprintf(w, "started work at\t %s\n", c.Gray(startTime.Format("15:04")))
+	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n", c.Bold(c.Cyan(goHomeAt.Format("15:04"))), c.Bold(c.Brown(prmPause)))
 
 	if goHomeIn.Minutes() >= 0 {
-		fmt.Printf("that is in %.f minutes\n", goHomeIn.Minutes())
+		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Bold(c.Green(goHomeIn.Minutes())))
 	} else {
-		fmt.Printf("that was %.f minutes ago\n", goHomeIn.Minutes()*-1)
+		fmt.Fprintf(w, "...that was\t %.f min ago\n", c.Bold(c.Green(goHomeIn.Minutes()*-1)))
 	}
 
-	if prmPause < 45 {
-		prmPause = 45
+	fmt.Fprintf(w, "leave latest at\t %s!\n", c.Red(goHomeLatest.Format("15:04")))
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
 	}
 
-	goHomeLatest := startTime.Add(time.Duration(10) * time.Hour).Add(time.Duration(prmPause) * time.Minute)
-	fmt.Printf("leave latest at %s\n", goHomeLatest.Format("15:04"))
+	return b
 }
