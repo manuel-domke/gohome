@@ -72,27 +72,6 @@ func getStartTime() time.Time {
 		return stat.ModTime()
 	}
 
-	return touchTimefile()
-}
-
-func resetTimefile() {
-	if err := os.Remove(timefilePath); err != nil {
-		log.Fatalf("could not remove %s", timefilePath)
-	}
-
-	os.Exit(0)
-}
-
-func checkIfTimefileIsOfToday(stat os.FileInfo) bool {
-	mtime := stat.ModTime()
-	now := time.Now()
-
-	return mtime.Year() == now.Year() &&
-		mtime.Month() == now.Month() &&
-		mtime.Day() == now.Day()
-}
-
-func touchTimefile() time.Time {
 	var startTime time.Time
 
 	if len(prmStartTime) == 0 {
@@ -105,18 +84,37 @@ func touchTimefile() time.Time {
 	}
 
 	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
+	touchTimefile(startTime)
+	return startTime
+}
 
+func checkIfTimefileIsOfToday(stat os.FileInfo) bool {
+	mtime := stat.ModTime()
+	now := time.Now()
+
+	return mtime.Year() == now.Year() &&
+		mtime.Month() == now.Month() &&
+		mtime.Day() == now.Day()
+}
+
+func touchTimefile(startTime time.Time) {
 	_, err := os.Create(timefilePath)
 	if err != nil {
-		log.Fatal("could not create timefile")
+		log.Fatal("could not edit timefile")
 	}
 
 	err = os.Chtimes(timefilePath, startTime, startTime)
 	if err != nil {
 		log.Fatal("could not set times on timefile")
 	}
+}
 
-	return startTime
+func resetTimefile() {
+	if err := os.Remove(timefilePath); err != nil {
+		log.Fatalf("could not remove %s", timefilePath)
+	}
+
+	os.Exit(0)
 }
 
 func main() {
