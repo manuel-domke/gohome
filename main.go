@@ -92,6 +92,7 @@ func main() {
 	goHomeAt := startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
 	goHomeIn := time.Until(goHomeAt)
 	goHomeLatest := startTime.Add(10 * time.Hour).Add(max(45, prmPause) * time.Minute)
+	goLatestIn := time.Until(goHomeLatest)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 	defer w.Flush()
@@ -105,7 +106,8 @@ func main() {
 		fmt.Fprintf(w, "...that was\t %.f min ago\n", c.Bold(c.Green(goHomeIn.Minutes()*-1)))
 	}
 
-	fmt.Fprintf(w, "leave latest at\t %s!\n", c.Red(goHomeLatest.Format("15:04")))
+	fmt.Fprintf(w, "leave latest at\t %s\n", c.Red(goHomeLatest.Format("15:04")))
+	fmt.Fprintf(w, "...that's in\t %.f min\n", c.Red(goLatestIn.Minutes()))
 }
 
 func max(a, b int) time.Duration {
