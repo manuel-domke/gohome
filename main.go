@@ -56,7 +56,11 @@ func parseGivenTime() (time.Time, error) {
 	}
 
 	y, m, d := time.Now().Date()
-	return time.Date(y, m, d, givenTime.Hour(), givenTime.Minute(), 0, 0, time.Local), nil
+	return time.Date(
+			y, m, d,
+			givenTime.Hour(), givenTime.Minute(), 0,
+			0, time.Local),
+		nil
 }
 
 func getStartTime() time.Time {
@@ -78,9 +82,12 @@ func getStartTime() time.Time {
 
 func main() {
 	log.SetFlags(0)
-	kingpin.Flag("start", "start time (hh:mm)").Short('s').StringVar(&prmStartTime)
-	kingpin.Flag("pause", "duration of break(s) in min.").Short('p').Default("60").IntVar(&prmPause)
-	kingpin.Flag("offset", "time you need from door to booting your pc in min.").Short('o').Default("5").IntVar(&prmOffset)
+	kingpin.Flag("start", "start time (hh:mm)").
+		Short('s').StringVar(&prmStartTime)
+	kingpin.Flag("pause", "duration of break(s) in min.").
+		Short('p').Default("60").IntVar(&prmPause)
+	kingpin.Flag("offset", "time you need from door to booting your pc in min.").
+		Short('o').Default("5").IntVar(&prmOffset)
 	kingpin.CommandLine.HelpFlag.Hidden()
 	kingpin.Parse()
 
@@ -97,8 +104,10 @@ func main() {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 	defer w.Flush()
 
-	fmt.Fprintf(w, "started work at\t %s\n", c.Gray(startTime.Format("15:04")))
-	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n", c.Bold(c.Cyan(goHomeAt.Format("15:04"))), c.Bold(c.Brown(prmPause)))
+	fmt.Fprintf(w, "started work at\t %s\n\n", c.Gray(startTime.Format("15:04")))
+	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
+		c.Bold(c.Cyan(goHomeAt.Format("15:04"))),
+		c.Brown(prmPause))
 
 	if goHomeIn.Minutes() >= 0 {
 		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Bold(c.Green(goHomeIn.Minutes())))
@@ -106,7 +115,7 @@ func main() {
 		fmt.Fprintf(w, "...that was\t %.f min ago\n", c.Bold(c.Green(goHomeIn.Minutes()*-1)))
 	}
 
-	fmt.Fprintf(w, "leave latest at\t %s\n", c.Red(goHomeLatest.Format("15:04")))
+	fmt.Fprintf(w, "\nleave latest at\t %s\n", c.Red(goHomeLatest.Format("15:04")))
 	fmt.Fprintf(w, "...that's in\t %.f min\n", c.Red(goLatestIn.Minutes()))
 }
 
