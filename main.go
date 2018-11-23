@@ -17,14 +17,16 @@ var (
 	prmStartTime string
 	prmPause     int
 	prmOffset    int
+	prmReset     bool
+	timefilePath = os.Getenv("HOME") + "/.gohome"
 )
 
-func getFirstSyslogEntry() (time.Time, error) {
+func getEarliestSyslogToday(syslogPath string) time.Time {
 	var startTime time.Time
 
-	syslog, err := os.Open("/var/log/syslog")
+	syslog, err := os.Open(syslogPath)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("could not read /var/log/syslog")
+		log.Fatalf("could not read %s", syslogPath)
 	}
 
 	scanner := bufio.NewScanner(syslog)
@@ -35,46 +37,83 @@ func getFirstSyslogEntry() (time.Time, error) {
 			dateString := strings.Join(dateTokens[:2], " ")
 			startTime, err = time.Parse("Jan 2 15 04", dateString)
 			if err != nil {
-				break
+				log.Fatal("could not parse time in syslog")
 			}
 
 			startTime = time.Date(
 				time.Now().Year(), startTime.Month(), startTime.Day(),
-				startTime.Hour(), startTime.Minute(), 0, 0, time.Local)
+				startTime.Hour(), startTime.Minute(), 0, 0, time.Local,
+			)
 
-			return startTime, nil
+			break
 		}
 	}
 
-	return time.Time{}, fmt.Errorf("could not parse time in syslog")
+	return startTime
 }
 
-func parseGivenTime() (time.Time, error) {
+func parseGivenTime() time.Time {
 	givenTime, err := time.Parse("15:04", prmStartTime)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("given time not in format hh:mm")
+		log.Fatal("given time is not in format hh:mm")
 	}
 
 	y, m, d := time.Now().Date()
 	return time.Date(
-			y, m, d,
-			givenTime.Hour(), givenTime.Minute(), 0,
-			0, time.Local),
-		nil
+		y, m, d,
+		givenTime.Hour(), givenTime.Minute(), 0,
+		0, time.Local,
+	)
 }
 
 func getStartTime() time.Time {
-	var startTime time.Time
-	var err error
-
-	if len(prmStartTime) == 0 {
-		startTime, err = getFirstSyslogEntry()
-	} else {
-		startTime, err = parseGivenTime()
+	stat, err := os.Stat(timefilePath)
+	if !os.IsNotExist(err) && checkIfTimefileIsOfToday(stat) {
+		return stat.ModTime()
 	}
 
+	return touchTimefile()
+}
+
+func resetTimefile() {
+	if err := os.Remove(timefilePath); err != nil {
+		log.Fatalf("could not remove %s", timefilePath)
+	}
+
+	os.Exit(0)
+}
+
+func checkIfTimefileIsOfToday(stat os.FileInfo) bool {
+	mtime := stat.ModTime()
+	now := time.Now()
+
+	return mtime.Year() == now.Year() &&
+		mtime.Month() == now.Month() &&
+		mtime.Day() == now.Day()
+}
+
+func touchTimefile() time.Time {
+	var startTime time.Time
+
+	if len(prmStartTime) == 0 {
+		startTime = earliest(
+			getEarliestSyslogToday("/var/log/syslog"),
+			getEarliestSyslogToday("/var/log/syslog.1"),
+		)
+	} else {
+		startTime = parseGivenTime()
+	}
+
+	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
+
+	_, err := os.Create(timefilePath)
 	if err != nil {
-		log.Fatalf("unable to get start time: %s", err)
+		log.Fatal("could not create timefile")
+	}
+
+	err = os.Chtimes(timefilePath, startTime, startTime)
+	if err != nil {
+		log.Fatal("could not set times on timefile")
 	}
 
 	return startTime
@@ -88,17 +127,23 @@ func main() {
 		Short('p').Default("60").IntVar(&prmPause)
 	kingpin.Flag("offset", "time you need from door to booting your pc in min.").
 		Short('o').Default("3").IntVar(&prmOffset)
-	kingpin.CommandLine.HelpFlag.Hidden()
+	kingpin.Flag("reset", "reset the timefile").
+		Short('r').BoolVar(&prmReset)
 	kingpin.Parse()
+
+	if prmReset {
+		resetTimefile()
+	}
 
 	if prmPause < 30 {
 		prmPause = 30
 	}
 
-	startTime := getStartTime().Add(time.Duration(prmOffset*-1) * time.Minute)
+	startTime := getStartTime()
+
 	goHomeAt := startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
 	goHomeIn := time.Until(goHomeAt)
-	goHomeLatest := startTime.Add(10 * time.Hour).Add(max(45, prmPause) * time.Minute)
+	goHomeLatest := startTime.Add(10 * time.Hour).Add(longer(45, prmPause) * time.Minute)
 	goLatestIn := time.Until(goHomeLatest)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
@@ -107,7 +152,8 @@ func main() {
 	fmt.Fprintf(w, "started work at\t %s\n\n", c.Gray(startTime.Format("15:04")))
 	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
 		c.Bold(c.Cyan(goHomeAt.Format("15:04"))),
-		c.Brown(prmPause))
+		c.Brown(prmPause),
+	)
 
 	if goHomeIn.Minutes() >= 0 {
 		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Bold(c.Green(goHomeIn.Minutes())))
@@ -119,10 +165,18 @@ func main() {
 	fmt.Fprintf(w, "...that's in\t %.f min\n", c.Red(goLatestIn.Minutes()))
 }
 
-func max(a, b int) time.Duration {
+func longer(a, b int) time.Duration {
 	if a > b {
 		return time.Duration(a)
 	}
 
 	return time.Duration(b)
+}
+
+func earliest(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+
+	return b
 }
