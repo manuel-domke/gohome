@@ -87,7 +87,7 @@ func main() {
 	kingpin.Flag("pause", "duration of break(s) in min.").
 		Short('p').Default("60").IntVar(&prmPause)
 	kingpin.Flag("offset", "time you need from door to booting your pc in min.").
-		Short('o').Default("5").IntVar(&prmOffset)
+		Short('o').Default("3").IntVar(&prmOffset)
 	kingpin.CommandLine.HelpFlag.Hidden()
 	kingpin.Parse()
 
