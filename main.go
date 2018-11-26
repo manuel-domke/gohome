@@ -146,24 +146,25 @@ func main() {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 	defer w.Flush()
 
-	fmt.Fprintf(w, "started work at\t %s\n\n", c.Gray(startTime.Format("15:04")))
+	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(startTime.Format("15:04"))))
+	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(prmOffset))
 	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
 		c.Bold(c.Cyan(goHomeAt.Format("15:04"))),
 		c.Brown(prmPause),
 	)
 
 	if goHomeIn.Minutes() >= 0 {
-		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Bold(c.Cyan(goHomeIn.Minutes())))
+		fmt.Fprintf(w, "...that's in\t %s\n", c.Bold(c.Cyan(printDuration(goHomeIn))))
 	} else {
-		fmt.Fprintf(w, "...that was\t %.f min ago\n", c.Bold(c.Green(goHomeIn.Minutes()*-1)))
+		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Green(printDuration(goHomeIn))))
 	}
 
 	fmt.Fprintf(w, "\nleave latest at\t %s\n", c.Red(goHomeLatest.Format("15:04")))
 
 	if goLatestIn.Minutes() >= 0 {
-		fmt.Fprintf(w, "...that's in\t %.f min\n", c.Red(goLatestIn.Minutes()))
+		fmt.Fprintf(w, "...that's in\t %s\n", c.Red(printDuration(goLatestIn)))
 	} else {
-		fmt.Fprintf(w, "...that was\t %.f min ago\n", c.Bold(c.Red(goLatestIn.Minutes()*-1)))
+		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Red(printDuration(goLatestIn))))
 	}
 }
 
@@ -181,4 +182,10 @@ func earliest(a, b time.Time) time.Time {
 	}
 
 	return b
+}
+
+func printDuration(dur time.Duration) string {
+	h := int(dur.Hours())
+	m := int(dur.Minutes()) - 60*h
+	return strings.Replace(fmt.Sprintf("%dm%dh", h, m), "-", "", -1)
 }
