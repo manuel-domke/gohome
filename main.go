@@ -187,5 +187,5 @@ func earliest(a, b time.Time) time.Time {
 func printDuration(dur time.Duration) string {
 	h := int(dur.Hours())
 	m := int(dur.Minutes()) - 60*h
-	return strings.Replace(fmt.Sprintf("%dm%dh", h, m), "-", "", -1)
+	return strings.Replace(fmt.Sprintf("%dh%dm", h, m), "-", "", -1)
 }
