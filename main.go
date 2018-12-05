@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -18,39 +17,8 @@ var (
 	prmPause     int
 	prmOffset    int
 	prmReset     bool
-	timefilePath = os.Getenv("HOME") + "/.gohome"
+	timeFile     = NewTimefile(os.Getenv("HOME") + "/.gohome")
 )
-
-func getEarliestSyslogToday(syslogPath string) time.Time {
-	var startTime time.Time
-
-	syslog, err := os.Open(syslogPath)
-	if err != nil {
-		log.Fatalf("could not read %s", syslogPath)
-	}
-
-	scanner := bufio.NewScanner(syslog)
-
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), time.Now().Format("Jan 2")) {
-			dateTokens := strings.SplitN(scanner.Text(), ":", 3)
-			dateString := strings.Join(dateTokens[:2], " ")
-			startTime, err = time.Parse("Jan 2 15 04", dateString)
-			if err != nil {
-				log.Fatal("could not parse time in syslog")
-			}
-
-			startTime = time.Date(
-				time.Now().Year(), startTime.Month(), startTime.Day(),
-				startTime.Hour(), startTime.Minute(), 0, 0, time.Local,
-			)
-
-			break
-		}
-	}
-
-	return startTime
-}
 
 func parseGivenTime() time.Time {
 	givenTime, err := time.Parse("15:04", prmStartTime)
@@ -65,58 +33,9 @@ func parseGivenTime() time.Time {
 	)
 }
 
-func getStartTime() time.Time {
-	stat, err := os.Stat(timefilePath)
-	if !os.IsNotExist(err) && checkIfTimefileIsOfToday(stat) {
-		return stat.ModTime()
-	}
-
+func main() {
 	var startTime time.Time
 
-	if len(prmStartTime) == 0 {
-		startTime = earliest(
-			getEarliestSyslogToday("/var/log/syslog"),
-			getEarliestSyslogToday("/var/log/syslog.1"),
-		)
-	} else {
-		startTime = parseGivenTime()
-	}
-
-	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
-	touchTimefile(startTime)
-	return startTime
-}
-
-func checkIfTimefileIsOfToday(stat os.FileInfo) bool {
-	mtime := stat.ModTime()
-	now := time.Now()
-
-	return mtime.Year() == now.Year() &&
-		mtime.Month() == now.Month() &&
-		mtime.Day() == now.Day()
-}
-
-func touchTimefile(startTime time.Time) {
-	_, err := os.Create(timefilePath)
-	if err != nil {
-		log.Fatal("could not edit timefile")
-	}
-
-	err = os.Chtimes(timefilePath, startTime, startTime)
-	if err != nil {
-		log.Fatal("could not set times on timefile")
-	}
-}
-
-func resetTimefile() {
-	if err := os.Remove(timefilePath); err != nil {
-		log.Fatalf("could not remove %s", timefilePath)
-	}
-
-	os.Exit(0)
-}
-
-func main() {
 	log.SetFlags(0)
 	kingpin.Flag("start", "start time (hh:mm)").
 		Short('s').StringVar(&prmStartTime)
@@ -129,14 +48,24 @@ func main() {
 	kingpin.Parse()
 
 	if prmReset {
-		resetTimefile()
+		timeFile.Remove()
 	}
 
 	if prmPause < 30 {
 		prmPause = 30
 	}
 
-	startTime := getStartTime()
+	if len(prmStartTime) == 0 {
+		if !timeFile.IsOfToday() {
+			timeFile.Set(getEarliestSyslogToday())
+		}
+
+		startTime = timeFile.Get()
+	} else {
+		startTime = parseGivenTime()
+	}
+
+	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
 
 	goHomeAt := startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
 	goHomeIn := time.Until(goHomeAt)
@@ -174,14 +103,6 @@ func longer(a, b int) time.Duration {
 	}
 
 	return time.Duration(b)
-}
-
-func earliest(a, b time.Time) time.Time {
-	if a.Before(b) {
-		return a
-	}
-
-	return b
 }
 
 func printDuration(dur time.Duration) string {
