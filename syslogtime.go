@@ -24,7 +24,7 @@ func getResumeTimeFromJournal() time.Time {
 	scanner := bufio.NewScanner(strings.NewReader(journal))
 	for scanner.Scan() {
 		startTime, err = time.Parse("2006-01-02T15:04:05-0700", scanner.Text()[:24])
-		if err == nil && startTime.Hour() >= 6 && startTime.Minute() >= 30 {
+		if err == nil && isAfter0630(startTime) {
 			success = true
 			break
 		}
@@ -35,4 +35,13 @@ func getResumeTimeFromJournal() time.Time {
 	}
 
 	return startTime
+}
+
+func isAfter0630(t time.Time) bool {
+	if t.Hour() > 6 ||
+		t.Hour() == 6 && t.Minute() >= 30 {
+		return true
+
+	}
+	return false
 }
