@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -25,10 +26,16 @@ func newTimefile(path string) *timefile {
 	return timeFile
 }
 
-func (t *timefile) set(setTime time.Time) {
+func (t *timefile) set(setTime time.Time, pause int) {
 	var err error
+	var writer *os.File
 
-	_, err = os.Create(t.path)
+	writer, err = os.Create(t.path)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = fmt.Fprintf(writer, "%d\n", pause)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,6 +54,25 @@ func (t *timefile) set(setTime time.Time) {
 func (t *timefile) get() time.Time {
 	return t.stat.ModTime()
 }
+
+// func (t *timefile) getPauseFromFile() int {
+// 	file, err := os.Open(t.path)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	str, err := bufio.NewReader(file).ReadString('\n')
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	pause, err := strconv.Atoi(str)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	return pause
+// }
 
 func (t *timefile) isOfToday() bool {
 	if t.stat == nil {

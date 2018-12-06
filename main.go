@@ -12,14 +12,7 @@ import (
 	c "github.com/logrusorgru/aurora"
 )
 
-var (
-	prmStartTime string
-	prmPause     int
-	prmOffset    int
-	prmReset     bool
-)
-
-func parseGivenTime() time.Time {
+func parseGivenTime(prmStartTime string) time.Time {
 	givenTime, err := time.Parse("15:04", prmStartTime)
 	if err != nil {
 		log.Fatal(err)
@@ -33,14 +26,21 @@ func parseGivenTime() time.Time {
 }
 
 func main() {
-	var startTime time.Time
+	var (
+		startTime    time.Time
+		prmStartTime string
+		prmPause     int
+		prmOffset    int
+		prmReset     bool
+	)
+
 	timeFile := newTimefile(os.Getenv("HOME") + "/.gohome")
 
 	log.SetFlags(0)
 	kingpin.Flag("start", "start time (hh:mm)").
 		Short('s').StringVar(&prmStartTime)
 	kingpin.Flag("pause", "duration of break(s) in min.").
-		Short('p').Default("60").IntVar(&prmPause)
+		Short('p').IntVar(&prmPause)
 	kingpin.Flag("offset", "time you need from door to booting your pc in min.").
 		Short('o').Default("3").IntVar(&prmOffset)
 	kingpin.Flag("reset", "reset the timefile").
@@ -51,19 +51,23 @@ func main() {
 		timeFile.remove()
 	}
 
-	if prmPause < 30 {
-		prmPause = 30
-	}
-
 	if len(prmStartTime) == 0 {
 		if !timeFile.isOfToday() {
-			timeFile.set(getResumeTimeFromJournal())
+			timeFile.set(getResumeTimeFromJournal(), prmPause)
 		}
 
 		startTime = timeFile.get()
 	} else {
-		startTime = parseGivenTime()
-		timeFile.set(startTime)
+		startTime = parseGivenTime(prmStartTime)
+		timeFile.set(startTime, prmPause)
+	}
+
+	// if prmPause == 0 {
+	// 	prmPause = timeFile.getPauseFromFile()
+	// }
+
+	if prmPause < 30 {
+		prmPause = 30
 	}
 
 	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
