@@ -6,30 +6,54 @@ import (
 	"time"
 )
 
-type Timefile struct {
-	Path string
-	Stat os.FileInfo
+type timefile struct {
+	path string
+	stat os.FileInfo
 }
 
-func NewTimefile(path string) *Timefile {
-	timeFile := new(Timefile)
-	timeFile.Path = path
-	timeFile.Stat, _ = os.Stat(path)
+func newTimefile(path string) *timefile {
+	var err error
+
+	timeFile := new(timefile)
+	timeFile.path = path
+	timeFile.stat, err = os.Stat(path)
+
+	if err != nil && !os.IsNotExist(err) {
+		log.Fatal(err)
+	}
+
 	return timeFile
 }
 
-func (t Timefile) Set(setTime time.Time) {
-	os.Create(t.Path)
-	os.Chtimes(t.Path, setTime, setTime)
+func (t *timefile) set(setTime time.Time) {
+	var err error
+
+	_, err = os.Create(t.path)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.Chtimes(t.path, setTime, setTime)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	t.stat, err = os.Stat(t.path)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-func (t Timefile) Get() time.Time {
-	stat, _ := os.Stat(t.Path)
-	return stat.ModTime()
+func (t *timefile) get() time.Time {
+	return t.stat.ModTime()
 }
 
-func (t Timefile) IsOfToday() bool {
-	mtime := t.Stat.ModTime()
+func (t *timefile) isOfToday() bool {
+	if t.stat == nil {
+		return false
+	}
+
+	mtime := t.stat.ModTime()
 	now := time.Now()
 
 	return mtime.Year() == now.Year() &&
@@ -37,9 +61,11 @@ func (t Timefile) IsOfToday() bool {
 		mtime.Day() == now.Day()
 }
 
-func (t Timefile) Remove() {
-	if err := os.Remove(t.Path); err != nil {
-		log.Fatalf("could not remove %s", t.Path)
+func (t *timefile) remove() {
+	err := os.Remove(t.path)
+
+	if err != nil && !os.IsNotExist(err) {
+		log.Fatal(err)
 	}
 
 	os.Exit(0)

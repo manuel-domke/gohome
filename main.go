@@ -17,13 +17,12 @@ var (
 	prmPause     int
 	prmOffset    int
 	prmReset     bool
-	timeFile     = NewTimefile(os.Getenv("HOME") + "/.gohome")
 )
 
 func parseGivenTime() time.Time {
 	givenTime, err := time.Parse("15:04", prmStartTime)
 	if err != nil {
-		log.Fatal("given time is not in format hh:mm")
+		log.Fatal(err)
 	}
 
 	return time.Date(
@@ -35,6 +34,7 @@ func parseGivenTime() time.Time {
 
 func main() {
 	var startTime time.Time
+	timeFile := newTimefile(os.Getenv("HOME") + "/.gohome")
 
 	log.SetFlags(0)
 	kingpin.Flag("start", "start time (hh:mm)").
@@ -48,7 +48,7 @@ func main() {
 	kingpin.Parse()
 
 	if prmReset {
-		timeFile.Remove()
+		timeFile.remove()
 	}
 
 	if prmPause < 30 {
@@ -56,24 +56,25 @@ func main() {
 	}
 
 	if len(prmStartTime) == 0 {
-		if !timeFile.IsOfToday() {
-			timeFile.Set(getEarliestSyslogToday())
+		if !timeFile.isOfToday() {
+			timeFile.set(getResumeTimeFromJournal())
 		}
 
-		startTime = timeFile.Get()
+		startTime = timeFile.get()
 	} else {
 		startTime = parseGivenTime()
+		timeFile.set(startTime)
 	}
 
 	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
 
 	goHomeAt := startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
-	goHomeIn := time.Until(goHomeAt)
 	goHomeLatest := startTime.Add(10 * time.Hour).Add(longer(45, prmPause) * time.Minute)
+
+	goHomeIn := time.Until(goHomeAt)
 	goLatestIn := time.Until(goHomeLatest)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
-	defer w.Flush()
 
 	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(startTime.Format("15:04"))))
 	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(prmOffset))
@@ -94,6 +95,10 @@ func main() {
 		fmt.Fprintf(w, "...that's in\t %s\n", c.Red(printDuration(goLatestIn)))
 	} else {
 		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Red(printDuration(goLatestIn))))
+	}
+
+	if err := w.Flush(); err != nil {
+		log.Fatal(err)
 	}
 }
 

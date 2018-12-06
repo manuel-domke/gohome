@@ -4,54 +4,34 @@ import (
 	"bufio"
 	"fmt"
 	"log"
-	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
 
-func getEarliestSyslogToday(syslogPaths ...string) time.Time {
-	var startTime, earliestHere time.Time
-	found := false
+func getResumeTimeFromJournal() time.Time {
+	var startTime time.Time
+	var err error
+	success := false
 
-	for _, syslogPath := range syslogPaths {
-		syslog, err := os.Open(syslogPath)
-		if err != nil {
-			continue
-		}
+	stdout, err := exec.Command("/bin/journalctl", "--since=today", "--no-pager", "-o", "short-iso").Output()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		scanner := bufio.NewScanner(syslog)
+	journal := fmt.Sprintf("%s", stdout)
 
-		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), time.Now().Format("Jan 2")) {
-				found = true
-				fmt.Printf("found %s\n", scanner.Text())
-				dateTokens := strings.SplitN(scanner.Text(), ":", 3)
-				dateString := strings.Join(dateTokens[:2], " ")
-				earliestHere, err = time.Parse("Jan 2 15 04", dateString)
-				if err != nil {
-					log.Fatalf("could not parse timestamp: %s\n", dateString)
-				}
-
-				if earliestHere.Hour() < 6 {
-					continue
-				}
-
-				earliestHere = time.Date(
-					time.Now().Year(), earliestHere.Month(), earliestHere.Day(),
-					earliestHere.Hour(), earliestHere.Minute(), 0, 0, time.Local,
-				)
-
-				break
-			}
-		}
-
-		if startTime.Before(earliestHere) {
-			startTime = earliestHere
+	scanner := bufio.NewScanner(strings.NewReader(journal))
+	for scanner.Scan() {
+		startTime, err = time.Parse("2006-01-02T15:04:05-0700", scanner.Text()[:24])
+		if err == nil && startTime.Hour() >= 6 && startTime.Minute() >= 30 {
+			success = true
+			break
 		}
 	}
 
-	if !found {
-		log.Fatal("did not find any syslog entries of today")
+	if !success {
+		log.Fatal("could not find timestamps in journalctl")
 	}
 
 	return startTime
