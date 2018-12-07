@@ -12,19 +12,6 @@ import (
 	c "github.com/logrusorgru/aurora"
 )
 
-func parseGivenTime(prmStartTime string) time.Time {
-	givenTime, err := time.Parse("15:04", prmStartTime)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return time.Date(
-		time.Now().Year(), time.Now().Month(), time.Now().Day(),
-		givenTime.Hour(), givenTime.Minute(), 0,
-		0, time.Local,
-	)
-}
-
 func main() {
 	var (
 		startTime    time.Time
@@ -51,29 +38,17 @@ func main() {
 		timeFile.remove()
 	}
 
-	if prmPause == 0 {
-		var err error
-		prmPause, err = timeFile.getPauseFromFile()
-		if err != nil {
-			log.Println("warning:", err)
-		}
-	}
-
-	if prmPause < 30 {
-		prmPause = 30
-	}
-
-	if len(prmStartTime) == 0 {
-		if !timeFile.isOfToday() {
-			timeFile.set(getResumeTimeFromJournal(), prmPause)
+	// if only one of start time or pause is specified, the other
+	// value jumps back to its default
+	if !timeFile.isOfToday() || len(prmStartTime) > 0 || prmPause > 0 {
+		if len(prmStartTime) == 0 {
+			prmStartTime = getResumeTimeFromJournal()
 		}
 
-		startTime = timeFile.get()
-	} else {
-		startTime = parseGivenTime(prmStartTime)
-		timeFile.set(startTime, prmPause)
+		timeFile.set(prmStartTime, max(prmPause, 30))
 	}
 
+	startTime, prmPause = timeFile.read()
 	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
 
 	goHomeAt := startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
@@ -110,12 +85,20 @@ func main() {
 	}
 }
 
-func longer(a, b int) time.Duration {
+func longer(a int, b int) time.Duration {
 	if a > b {
 		return time.Duration(a)
 	}
 
 	return time.Duration(b)
+}
+
+func max(a int, b int) int {
+	if a > b {
+		return a
+	}
+
+	return b
 }
 
 func printDuration(dur time.Duration) string {

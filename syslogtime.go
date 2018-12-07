@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func getResumeTimeFromJournal() time.Time {
+func getResumeTimeFromJournal() string {
 	var startTime time.Time
 	var err error
 	success := false
@@ -34,7 +34,7 @@ func getResumeTimeFromJournal() time.Time {
 		log.Fatal("could not find timestamps in journalctl")
 	}
 
-	return startTime
+	return startTime.Format("15:04")
 }
 
 func isAfter0630(t time.Time) bool {

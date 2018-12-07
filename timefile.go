@@ -11,24 +11,15 @@ import (
 
 type timefile struct {
 	path string
-	stat os.FileInfo
 }
 
 func newTimefile(path string) *timefile {
-	var err error
-
 	timeFile := new(timefile)
 	timeFile.path = path
-	timeFile.stat, err = os.Stat(path)
-
-	if err != nil && !os.IsNotExist(err) {
-		log.Fatal(err)
-	}
-
 	return timeFile
 }
 
-func (t *timefile) set(setTime time.Time, pause int) {
+func (t *timefile) set(setTime string, pause int) {
 	var err error
 	var writer *os.File
 
@@ -37,49 +28,52 @@ func (t *timefile) set(setTime time.Time, pause int) {
 		log.Fatal(err)
 	}
 
-	_, err = fmt.Fprintf(writer, "%d\n", pause)
+	_, err = time.Parse("15:04", setTime)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = os.Chtimes(t.path, setTime, setTime)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	t.stat, err = os.Stat(t.path)
+	_, err = fmt.Fprintf(writer, "%s\n%d\n", setTime, pause)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func (t *timefile) get() time.Time {
-	return t.stat.ModTime()
-}
-
-func (t *timefile) getPauseFromFile() (int, error) {
+func (t *timefile) read() (time.Time, int) {
 	file, err := os.Open(t.path)
 	if err != nil {
-		return 0, fmt.Errorf("could not open timefile")
+		log.Fatal("could not open timefile")
 	}
 
 	scanner := bufio.NewScanner(file)
-	scanner.Scan()
 
-	pause, err := strconv.Atoi(scanner.Text())
+	scanner.Scan()
+	// generates zero-year... bad.
+	startTime, err := time.Parse("15:04", scanner.Text())
 	if err != nil {
-		return 0, fmt.Errorf("could not read number from timefile")
+		log.Fatal("could not parse time in timefile")
 	}
 
-	return pause, nil
+	scanner.Scan()
+	pause, err := strconv.Atoi(scanner.Text())
+	if err != nil {
+		log.Fatal("could not pause value from timefile")
+	}
+
+	return startTime, pause
 }
 
 func (t *timefile) isOfToday() bool {
-	if t.stat == nil {
-		return false
+	stat, err := os.Stat(t.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+
+		log.Fatal(err)
 	}
 
-	mtime := t.stat.ModTime()
+	mtime := stat.ModTime()
 	now := time.Now()
 
 	return mtime.Year() == now.Year() &&
