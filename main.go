@@ -51,6 +51,18 @@ func main() {
 		timeFile.remove()
 	}
 
+	if prmPause == 0 {
+		var err error
+		prmPause, err = timeFile.getPauseFromFile()
+		if err != nil {
+			log.Println("warning:", err)
+		}
+	}
+
+	if prmPause < 30 {
+		prmPause = 30
+	}
+
 	if len(prmStartTime) == 0 {
 		if !timeFile.isOfToday() {
 			timeFile.set(getResumeTimeFromJournal(), prmPause)
@@ -60,14 +72,6 @@ func main() {
 	} else {
 		startTime = parseGivenTime(prmStartTime)
 		timeFile.set(startTime, prmPause)
-	}
-
-	// if prmPause == 0 {
-	// 	prmPause = timeFile.getPauseFromFile()
-	// }
-
-	if prmPause < 30 {
-		prmPause = 30
 	}
 
 	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)

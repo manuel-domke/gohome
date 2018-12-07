@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -55,24 +57,22 @@ func (t *timefile) get() time.Time {
 	return t.stat.ModTime()
 }
 
-// func (t *timefile) getPauseFromFile() int {
-// 	file, err := os.Open(t.path)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+func (t *timefile) getPauseFromFile() (int, error) {
+	file, err := os.Open(t.path)
+	if err != nil {
+		return 0, fmt.Errorf("could not open timefile")
+	}
 
-// 	str, err := bufio.NewReader(file).ReadString('\n')
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	scanner := bufio.NewScanner(file)
+	scanner.Scan()
 
-// 	pause, err := strconv.Atoi(str)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	pause, err := strconv.Atoi(scanner.Text())
+	if err != nil {
+		return 0, fmt.Errorf("could not read number from timefile")
+	}
 
-// 	return pause
-// }
+	return pause, nil
+}
 
 func (t *timefile) isOfToday() bool {
 	if t.stat == nil {
