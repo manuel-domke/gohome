@@ -48,7 +48,6 @@ func (t *timefile) read() (time.Time, int) {
 	scanner := bufio.NewScanner(file)
 
 	scanner.Scan()
-	// generates zero-year... bad.
 	startTime, err := time.Parse("15:04", scanner.Text())
 	if err != nil {
 		log.Fatal("could not parse time in timefile")
@@ -60,7 +59,7 @@ func (t *timefile) read() (time.Time, int) {
 		log.Fatal("could not pause value from timefile")
 	}
 
-	return startTime, pause
+	return insertInToday(startTime), pause
 }
 
 func (t *timefile) isOfToday() bool {
@@ -89,4 +88,13 @@ func (t *timefile) remove() {
 	}
 
 	os.Exit(0)
+}
+
+func insertInToday(hourAndMin time.Time) time.Time {
+	now := time.Now()
+	return time.Date(
+		now.Year(), now.Month(), now.Day(),
+		hourAndMin.Hour(), hourAndMin.Minute(),
+		0, 0, time.Local,
+	)
 }
