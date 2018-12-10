@@ -12,15 +12,19 @@ import (
 	c "github.com/logrusorgru/aurora"
 )
 
-func main() {
-	var (
-		startTime    time.Time
-		prmStartTime string
-		prmPause     int
-		prmOffset    int
-		prmReset     bool
-	)
+var (
+	prmStartTime string
+	prmPause     int
+	prmOffset    int
+	prmReset     bool
+)
 
+type timestruct struct {
+	goHomeAt, goHomeLatest time.Time
+	goHomeIn, goLatestIn   time.Duration
+}
+
+func main() {
 	timeFile := newTimefile(os.Getenv("HOME") + "/.gohome")
 
 	log.SetFlags(0)
@@ -38,46 +42,65 @@ func main() {
 		timeFile.remove()
 	}
 
-	// if only one of start time or pause is specified, the other
-	// value jumps back to its default
-	if !timeFile.isOfToday() || len(prmStartTime) > 0 || prmPause > 0 {
-		if len(prmStartTime) == 0 {
-			prmStartTime = getResumeTimeFromJournal()
+	if len(prmStartTime) == 0 && prmPause == 0 {
+		if !timeFile.isOfToday() {
+			timeFile.setStartTime(getResumeTimeFromJournal())
+			timeFile.setPause(60)
+			timeFile.store()
 		}
-
-		timeFile.set(prmStartTime, max(prmPause, 30))
+	} else if len(prmStartTime) == 0 && prmPause > 0 {
+		if !timeFile.isOfToday() {
+			timeFile.setStartTime(getResumeTimeFromJournal())
+			timeFile.setPause(max(prmPause, 30))
+			timeFile.store()
+		} else {
+			timeFile.setPause(max(prmPause, 30))
+			timeFile.store()
+		}
+	} else if len(prmStartTime) > 0 && prmPause == 0 {
+		if !timeFile.isOfToday() {
+			timeFile.setStartTime(prmStartTime)
+			timeFile.setPause(60)
+			timeFile.store()
+		} else {
+			timeFile.setStartTime(prmStartTime)
+			timeFile.store()
+		}
+	} else {
+		timeFile.setStartTime(prmStartTime)
+		timeFile.setPause(max(prmPause, 30))
+		timeFile.store()
 	}
 
-	startTime, prmPause = timeFile.read()
-	startTime = startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
+	timeFile.read()
 
-	goHomeAt := startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
-	goHomeLatest := startTime.Add(10 * time.Hour).Add(longer(45, prmPause) * time.Minute)
+	timeFile.startTime = timeFile.startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
+	timeStruct := timeFile.buildTimeStruct()
 
-	goHomeIn := time.Until(goHomeAt)
-	goLatestIn := time.Until(goHomeLatest)
-
+	output(timeFile, timeStruct)
+}
+func output(timeFile *timefile, timeStruct *timestruct) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 
-	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(startTime.Format("15:04"))))
+	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(timeFile.startTime.Format("15:04"))))
 	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(prmOffset))
 	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
-		c.Bold(c.Cyan(goHomeAt.Format("15:04"))),
+		c.Bold(c.Cyan(timeStruct.goHomeAt.Format("15:04"))),
 		c.Brown(prmPause),
 	)
 
-	if goHomeIn.Minutes() >= 0 {
-		fmt.Fprintf(w, "...that's in\t %s\n", c.Bold(c.Cyan(printDuration(goHomeIn))))
+	if timeStruct.goHomeIn.Minutes() >= 0 {
+		fmt.Fprintf(w, "...that's in\t %s\n", c.Bold(c.Cyan(printDuration(timeStruct.goHomeIn))))
 	} else {
-		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Green(printDuration(goHomeIn))))
+		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Green(printDuration(timeStruct.goHomeIn))))
 	}
 
-	fmt.Fprintf(w, "\nleave latest at\t %s\n", c.Red(goHomeLatest.Format("15:04")))
+	fmt.Fprintf(w, "\nleave latest at\t %s\n", c.Red(timeStruct.goHomeLatest.Format("15:04")))
 
-	if goLatestIn.Minutes() >= 0 {
-		fmt.Fprintf(w, "...that's in\t %s\n", c.Red(printDuration(goLatestIn)))
+	if timeStruct.goLatestIn.Minutes() >= 0 {
+		fmt.Fprintf(w, "...that's in\t %s\n", c.Red(printDuration(timeStruct.goLatestIn)))
 	} else {
-		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Red(printDuration(goLatestIn))))
+		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Red(printDuration(timeStruct.goLatestIn))))
 	}
 
 	if err := w.Flush(); err != nil {

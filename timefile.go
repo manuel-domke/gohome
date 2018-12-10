@@ -10,7 +10,9 @@ import (
 )
 
 type timefile struct {
-	path string
+	path      string
+	startTime time.Time
+	pause     int
 }
 
 func newTimefile(path string) *timefile {
@@ -19,27 +21,32 @@ func newTimefile(path string) *timefile {
 	return timeFile
 }
 
-func (t *timefile) set(setTime string, pause int) {
-	var err error
-	var writer *os.File
+func (t *timefile) setStartTime(setTime string) {
+	st, err := time.Parse("15:04", setTime)
+	if err != nil {
+		log.Fatalf("could not parse supplied start time: %s", setTime)
+	}
 
-	writer, err = os.Create(t.path)
+	t.startTime = insertInToday(st)
+}
+
+func (t *timefile) setPause(pause int) {
+	t.pause = pause
+}
+
+func (t *timefile) store() {
+	writer, err := os.Create(t.path)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = time.Parse("15:04", setTime)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = fmt.Fprintf(writer, "%s\n%d\n", setTime, pause)
+	_, err = fmt.Fprintf(writer, "%s\n%d\n", t.startTime.Format("15:04"), t.pause)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func (t *timefile) read() (time.Time, int) {
+func (t *timefile) read() {
 	file, err := os.Open(t.path)
 	if err != nil {
 		log.Fatal("could not open timefile")
@@ -56,10 +63,11 @@ func (t *timefile) read() (time.Time, int) {
 	scanner.Scan()
 	pause, err := strconv.Atoi(scanner.Text())
 	if err != nil {
-		log.Fatal("could not pause value from timefile")
+		log.Fatal("could not read pause value from timefile")
 	}
 
-	return insertInToday(startTime), pause
+	t.startTime = startTime
+	t.pause = pause
 }
 
 func (t *timefile) isOfToday() bool {
@@ -97,4 +105,16 @@ func insertInToday(hourAndMin time.Time) time.Time {
 		hourAndMin.Hour(), hourAndMin.Minute(),
 		0, 0, time.Local,
 	)
+}
+
+func (t *timefile) buildTimeStruct() *timestruct {
+	target := new(timestruct)
+
+	target.goHomeAt = t.startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
+	target.goHomeLatest = t.startTime.Add(10 * time.Hour).Add(longer(45, prmPause) * time.Minute)
+
+	target.goHomeIn = time.Until(target.goHomeAt)
+	target.goLatestIn = time.Until(target.goHomeLatest)
+
+	return target
 }
