@@ -33,48 +33,36 @@ func main() {
 	kingpin.Flag("pause", "duration of break(s) in min.").
 		Short('p').IntVar(&prmPause)
 	kingpin.Flag("offset", "time you need from door to booting your pc in min.").
-		Short('o').Default("3").IntVar(&prmOffset)
+		Short('o').IntVar(&prmOffset)
 	kingpin.Flag("reset", "reset the timefile").
 		Short('r').BoolVar(&prmReset)
 	kingpin.Parse()
 
-	if prmReset {
+	if prmReset || !timeFile.isOfToday() {
 		timeFile.remove()
 	}
 
-	if len(prmStartTime) == 0 && prmPause == 0 {
-		if !timeFile.isOfToday() {
-			timeFile.setStartTime(getResumeTimeFromJournal())
-			timeFile.setPause(60)
-			timeFile.store()
-		}
-	} else if len(prmStartTime) == 0 && prmPause > 0 {
-		if !timeFile.isOfToday() {
-			timeFile.setStartTime(getResumeTimeFromJournal())
-			timeFile.setPause(max(prmPause, 30))
-			timeFile.store()
-		} else {
-			timeFile.setPause(max(prmPause, 30))
-			timeFile.store()
-		}
-	} else if len(prmStartTime) > 0 && prmPause == 0 {
-		if !timeFile.isOfToday() {
-			timeFile.setStartTime(prmStartTime)
-			timeFile.setPause(60)
-			timeFile.store()
-		} else {
-			timeFile.setStartTime(prmStartTime)
-			timeFile.store()
-		}
-	} else {
+	if len(prmStartTime) > 0 {
 		timeFile.setStartTime(prmStartTime)
-		timeFile.setPause(max(prmPause, 30))
-		timeFile.store()
+	} else if !timeFile.isOfToday() {
+		timeFile.setStartTime(getResumeTimeFromJournal())
+	}
+
+	if prmPause > 0 {
+		timeFile.setPause(max(30, prmPause))
+	} else if !timeFile.isOfToday() {
+		timeFile.setPause(60)
+	}
+
+	if prmOffset > 0 {
+		timeFile.setOffset(prmOffset)
+	} else if !timeFile.isOfToday() {
+		timeFile.setOffset(3)
 	}
 
 	timeFile.read()
 
-	timeFile.startTime = timeFile.startTime.Add(time.Duration(prmOffset*-1) * time.Minute)
+	timeFile.startTime = timeFile.startTime.Add(time.Duration(timeFile.offset*-1) * time.Minute)
 	timeStruct := timeFile.buildTimeStruct()
 
 	output(timeFile, timeStruct)
@@ -83,10 +71,10 @@ func output(timeFile *timefile, timeStruct *timestruct) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 
 	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(timeFile.startTime.Format("15:04"))))
-	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(prmOffset))
+	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(timeFile.offset))
 	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
 		c.Bold(c.Cyan(timeStruct.goHomeAt.Format("15:04"))),
-		c.Brown(prmPause),
+		c.Brown(timeFile.pause),
 	)
 
 	if timeStruct.goHomeIn.Minutes() >= 0 {
@@ -127,5 +115,5 @@ func max(a int, b int) int {
 func printDuration(dur time.Duration) string {
 	h := int(dur.Hours())
 	m := int(dur.Minutes()) - 60*h
-	return strings.Replace(fmt.Sprintf("%dh%dm", h, m), "-", "", -1)
+	return strings.Replace(fmt.Sprintf("%dh%02dm", h, m), "-", "", -1)
 }

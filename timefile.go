@@ -1,21 +1,61 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
+	"database/sql"
 	"log"
 	"os"
-	"strconv"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+var (
+	db *sql.DB
 )
 
 type timefile struct {
 	path      string
 	startTime time.Time
 	pause     int
+	offset    int
 }
 
 func newTimefile(path string) *timefile {
+	var err error
+	db, err = sql.Open("sqlite3", path)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = os.Stat(path)
+	if os.IsNotExist(err) {
+		stmt, err := db.Prepare(`
+		CREATE TABLE IF NOT EXISTS times (
+			ID INT,
+			STARTTIME TEXT, 
+			PAUSE INT, 
+			OFFSET INT)
+		`)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = stmt.Exec()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		stmt, err = db.Prepare("INSERT INTO times (ID) VALUES (1)")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = stmt.Exec()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	timeFile := new(timefile)
 	timeFile.path = path
 	return timeFile
@@ -28,46 +68,67 @@ func (t *timefile) setStartTime(setTime string) {
 	}
 
 	t.startTime = insertInToday(st)
-}
 
-func (t *timefile) setPause(pause int) {
-	t.pause = pause
-}
-
-func (t *timefile) store() {
-	writer, err := os.Create(t.path)
+	stmt, err := db.Prepare("UPDATE times SET STARTTIME = ? WHERE ID=1")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = fmt.Fprintf(writer, "%s\n%d\n", t.startTime.Format("15:04"), t.pause)
+	_, err = stmt.Exec(setTime)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (t *timefile) setPause(pause int) {
+	t.pause = pause
+
+	stmt, err := db.Prepare("UPDATE times SET PAUSE = ? WHERE ID=1")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = stmt.Exec(pause)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (t *timefile) setOffset(offset int) {
+	t.offset = offset
+
+	stmt, err := db.Prepare("UPDATE times SET OFFSET = ? WHERE ID=1")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = stmt.Exec(offset)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 func (t *timefile) read() {
-	file, err := os.Open(t.path)
+	row, err := db.Query("SELECT STARTTIME,PAUSE,OFFSET FROM times")
 	if err != nil {
-		log.Fatal("could not open timefile")
+		log.Fatal(err)
+	}
+	defer row.Close()
+
+	var s string
+	for row.Next() {
+		err := row.Scan(&s, &t.pause, &t.offset)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	scanner := bufio.NewScanner(file)
-
-	scanner.Scan()
-	startTime, err := time.Parse("15:04", scanner.Text())
+	foobar, _ := time.Parse("15:04", s)
+	t.startTime = insertInToday(foobar)
+	err = row.Err()
 	if err != nil {
-		log.Fatal("could not parse time in timefile")
+		log.Fatal(err)
 	}
-
-	scanner.Scan()
-	pause, err := strconv.Atoi(scanner.Text())
-	if err != nil {
-		log.Fatal("could not read pause value from timefile")
-	}
-
-	t.startTime = startTime
-	t.pause = pause
 }
 
 func (t *timefile) isOfToday() bool {
@@ -110,8 +171,8 @@ func insertInToday(hourAndMin time.Time) time.Time {
 func (t *timefile) buildTimeStruct() *timestruct {
 	target := new(timestruct)
 
-	target.goHomeAt = t.startTime.Add(8 * time.Hour).Add(time.Duration(prmPause) * time.Minute)
-	target.goHomeLatest = t.startTime.Add(10 * time.Hour).Add(longer(45, prmPause) * time.Minute)
+	target.goHomeAt = t.startTime.Add(8 * time.Hour).Add(time.Duration(t.pause) * time.Minute)
+	target.goHomeLatest = t.startTime.Add(10 * time.Hour).Add(longer(45, t.pause) * time.Minute)
 
 	target.goHomeIn = time.Until(target.goHomeAt)
 	target.goLatestIn = time.Until(target.goHomeLatest)
