@@ -1,138 +1,94 @@
 package main
 
 import (
-	"database/sql"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"strings"
+	"text/tabwriter"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	c "github.com/logrusorgru/aurora"
+	"gopkg.in/yaml.v2"
 )
 
-var (
-	db *sql.DB
-)
-
-type timefile struct {
-	path      string
-	startTime time.Time
-	pause     int
-	offset    int
+type timestruct struct {
+	TimefilePath           string        `yaml:"-"`
+	Pause                  int           `yaml:"Pause"`
+	Offset                 int           `yaml:"Offset"`
+	StartTime              time.Time     `yaml:"StartTime"`
+	GoHomeAt, GoHomeLatest time.Time     `yaml:"-"`
+	GoHomeIn, GoLatestIn   time.Duration `yaml:"-"`
 }
 
-func newTimefile(path string) *timefile {
+func newTimestruct() *timestruct {
+	ts := new(timestruct)
+	ts.TimefilePath = os.Getenv("HOME") + "/.gohome"
+	return ts
+}
+
+func (t *timestruct) setStartTime(setTime string) {
 	var err error
-	db, err = sql.Open("sqlite3", path)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = os.Stat(path)
-	if os.IsNotExist(err) {
-		stmt, err := db.Prepare(`
-		CREATE TABLE IF NOT EXISTS times (
-			ID INT,
-			STARTTIME TEXT, 
-			PAUSE INT, 
-			OFFSET INT)
-		`)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = stmt.Exec()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		stmt, err = db.Prepare("INSERT INTO times (ID) VALUES (1)")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = stmt.Exec()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	timeFile := new(timefile)
-	timeFile.path = path
-	return timeFile
-}
-
-func (t *timefile) setStartTime(setTime string) {
-	st, err := time.Parse("15:04", setTime)
+	t.StartTime, err = time.Parse("15:04", setTime)
 	if err != nil {
 		log.Fatalf("could not parse supplied start time: %s", setTime)
 	}
 
-	t.startTime = insertInToday(st)
+	now := time.Now()
+	t.StartTime = time.Date(
+		now.Year(), now.Month(), now.Day(),
+		t.StartTime.Hour(), t.StartTime.Minute(),
+		0, 0, time.Local,
+	)
+}
 
-	stmt, err := db.Prepare("UPDATE times SET STARTTIME = ? WHERE ID=1")
+func (t *timestruct) setPause(pause int) {
+	if pause < 30 {
+		t.Pause = 30
+	} else {
+		t.Pause = pause
+	}
+}
+
+func (t *timestruct) setOffset(offset int) {
+	if offset == 0 {
+		t.Offset = 3
+	} else {
+		t.Offset = offset
+	}
+}
+
+func (t *timestruct) store() {
+	yaml, err := yaml.Marshal(&t)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = stmt.Exec(setTime)
+	timefile, err := os.Create(t.TimefilePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = fmt.Fprintln(timefile, string(yaml))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func (t *timefile) setPause(pause int) {
-	t.pause = pause
-
-	stmt, err := db.Prepare("UPDATE times SET PAUSE = ? WHERE ID=1")
+func (t *timestruct) read() {
+	timefileContent, err := ioutil.ReadFile(t.TimefilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = stmt.Exec(pause)
-	if err != nil {
+	if err = yaml.Unmarshal(timefileContent, &t); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func (t *timefile) setOffset(offset int) {
-	t.offset = offset
-
-	stmt, err := db.Prepare("UPDATE times SET OFFSET = ? WHERE ID=1")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = stmt.Exec(offset)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func (t *timefile) read() {
-	row, err := db.Query("SELECT STARTTIME,PAUSE,OFFSET FROM times")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer row.Close()
-
-	var s string
-	for row.Next() {
-		err := row.Scan(&s, &t.pause, &t.offset)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	foobar, _ := time.Parse("15:04", s)
-	t.startTime = insertInToday(foobar)
-	err = row.Err()
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func (t *timefile) isOfToday() bool {
-	stat, err := os.Stat(t.path)
+func (t *timestruct) timeFileisOfToday() bool {
+	stat, err := os.Stat(t.TimefilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false
@@ -149,8 +105,8 @@ func (t *timefile) isOfToday() bool {
 		mtime.Day() == now.Day()
 }
 
-func (t *timefile) remove() {
-	err := os.Remove(t.path)
+func (t *timestruct) remove() {
+	err := os.Remove(t.TimefilePath)
 
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatal(err)
@@ -159,23 +115,53 @@ func (t *timefile) remove() {
 	os.Exit(0)
 }
 
-func insertInToday(hourAndMin time.Time) time.Time {
-	now := time.Now()
-	return time.Date(
-		now.Year(), now.Month(), now.Day(),
-		hourAndMin.Hour(), hourAndMin.Minute(),
-		0, 0, time.Local,
-	)
+func (t *timestruct) calculateDeadlines() {
+	t.StartTime = t.StartTime.Add(time.Duration(t.Offset*-1) * time.Minute)
+	t.GoHomeAt = t.StartTime.Add(8 * time.Hour).Add(time.Duration(t.Pause) * time.Minute)
+	t.GoHomeLatest = t.StartTime.Add(10 * time.Hour).Add(longer(45, t.Pause) * time.Minute)
+	t.GoHomeIn = time.Until(t.GoHomeAt)
+	t.GoLatestIn = time.Until(t.GoHomeLatest)
 }
 
-func (t *timefile) buildTimeStruct() *timestruct {
-	target := new(timestruct)
+func (t *timestruct) print() {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 
-	target.goHomeAt = t.startTime.Add(8 * time.Hour).Add(time.Duration(t.pause) * time.Minute)
-	target.goHomeLatest = t.startTime.Add(10 * time.Hour).Add(longer(45, t.pause) * time.Minute)
+	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(t.StartTime.Format("15:04"))))
+	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(t.Offset))
+	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
+		c.Bold(c.Cyan(t.GoHomeAt.Format("15:04"))),
+		c.Brown(t.Pause),
+	)
 
-	target.goHomeIn = time.Until(target.goHomeAt)
-	target.goLatestIn = time.Until(target.goHomeLatest)
+	if t.GoHomeIn.Minutes() >= 0 {
+		fmt.Fprintf(w, "...that's in\t %s\n", c.Bold(c.Cyan(printDuration(t.GoHomeIn))))
+	} else {
+		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Green(printDuration(t.GoHomeIn))))
+	}
 
-	return target
+	fmt.Fprintf(w, "\nleave latest at\t %s\n", c.Red(t.GoHomeLatest.Format("15:04")))
+
+	if t.GoLatestIn.Minutes() >= 0 {
+		fmt.Fprintf(w, "...that's in\t %s\n", c.Red(printDuration(t.GoLatestIn)))
+	} else {
+		fmt.Fprintf(w, "...that was\t %s ago\n", c.Bold(c.Red(printDuration(t.GoLatestIn))))
+	}
+
+	if err := w.Flush(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func longer(a int, b int) time.Duration {
+	if a > b {
+		return time.Duration(a)
+	}
+
+	return time.Duration(b)
+}
+
+func printDuration(dur time.Duration) string {
+	h := int(dur.Hours())
+	m := int(dur.Minutes()) - 60*h
+	return strings.Replace(fmt.Sprintf("%dh%02dm", h, m), "-", "", -1)
 }
