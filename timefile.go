@@ -52,11 +52,7 @@ func (t *timestruct) setPause(pause int) {
 }
 
 func (t *timestruct) setOffset(offset int) {
-	if offset == 0 {
-		t.Offset = 3
-	} else {
-		t.Offset = offset
-	}
+	t.Offset = offset
 }
 
 func (t *timestruct) store() {
