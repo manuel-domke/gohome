@@ -1,30 +1,19 @@
 package main
 
 import (
-	"github.com/alecthomas/kingpin"
+	wf "gitlab.com/danielb42/whiteflag"
 )
 
 func main() {
-	var (
-		prmStartTime string
-		prmPause     int
-		prmOffset    int
-		prmReset     bool
-	)
-
-	kingpin.Flag("start", "start time (hh:mm)").
-		Short('s').StringVar(&prmStartTime)
-	kingpin.Flag("pause", "duration of break(s) in min.").
-		Short('p').IntVar(&prmPause)
-	kingpin.Flag("offset", "time you need from door to booting your pc in min.").
-		Short('o').IntVar(&prmOffset)
-	kingpin.Flag("reset", "reset the timefile").
-		Short('r').BoolVar(&prmReset)
-	kingpin.Parse()
+	wf.Alias("s", "start", "start time (hh:mm)")
+	wf.Alias("p", "pause", "duration of break(s) in min.")
+	wf.Alias("o", "offset", "time you need from door to booting your pc in min.")
+	wf.Alias("r", "reset", "reset the timefile")
+	wf.ParseCommandLine()
 
 	timeStruct := newTimestruct()
 
-	if prmReset {
+	if wf.CheckBool("reset") {
 		timeStruct.remove()
 	}
 
@@ -32,20 +21,20 @@ func main() {
 		timeStruct.read()
 	}
 
-	if len(prmStartTime) > 0 {
-		timeStruct.setStartTime(prmStartTime)
+	if wf.CheckString("start") {
+		timeStruct.setStartTime(wf.GetString("start"))
 	} else if !timeStruct.timeFileisOfToday() {
 		timeStruct.setStartTime(getResumeTimeFromJournal())
 	}
 
-	if prmPause > 0 {
-		timeStruct.setPause(prmPause)
+	if wf.CheckInt("pause") {
+		timeStruct.setPause(wf.GetInt("pause"))
 	} else if !timeStruct.timeFileisOfToday() {
 		timeStruct.setPause(60)
 	}
 
-	if prmOffset > 0 {
-		timeStruct.setOffset(prmOffset)
+	if wf.CheckInt("offset") {
+		timeStruct.setOffset(wf.GetInt("offset"))
 	} else if !timeStruct.timeFileisOfToday() {
 		timeStruct.setOffset(3)
 	}
