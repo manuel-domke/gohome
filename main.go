@@ -1,7 +1,7 @@
 package main
 
 import (
-	wf "gitlab.com/danielb42/whiteflag"
+	wf "github.com/danielb42/whiteflag"
 )
 
 func main() {
