@@ -38,10 +38,5 @@ func getResumeTimeFromJournal() string {
 }
 
 func isAfter0630(t time.Time) bool {
-	if t.Hour() > 6 ||
-		t.Hour() == 6 && t.Minute() >= 30 {
-		return true
-
-	}
-	return false
+	return t.Hour() > 6 || t.Hour() == 6 && t.Minute() >= 30
 }

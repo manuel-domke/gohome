@@ -115,6 +115,14 @@ func (t *timestruct) calculateDeadlines() {
 	t.StartTime = t.StartTime.Add(time.Duration(t.Offset*-1) * time.Minute)
 	t.GoHomeAt = t.StartTime.Add(8 * time.Hour).Add(time.Duration(t.Pause) * time.Minute)
 	t.GoHomeLatest = t.StartTime.Add(10 * time.Hour).Add(longer(45, t.Pause) * time.Minute)
+
+	if t.GoHomeLatest.Hour() >= 21 || t.GoHomeLatest.Day() != t.StartTime.Day() {
+		t.GoHomeLatest = time.Date(
+			t.StartTime.Year(), t.StartTime.Month(), t.StartTime.Day(),
+			21, 0, 0, 0, time.Local,
+		)
+	}
+
 	t.GoHomeIn = time.Until(t.GoHomeAt)
 	t.GoLatestIn = time.Until(t.GoHomeLatest)
 }
@@ -124,10 +132,19 @@ func (t *timestruct) print() {
 
 	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(t.StartTime.Format("15:04"))))
 	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(t.Offset))
-	fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
-		c.Bold(c.Cyan(t.GoHomeAt.Format("15:04"))),
-		c.Brown(t.Pause),
-	)
+
+	if t.GoHomeAt.Hour() >= 21 || t.GoHomeAt.Day() != t.StartTime.Day() {
+		fmt.Fprintf(w, "day complete at\t %s (includes %d min. break) %s\n",
+			c.Bold(c.Red(t.GoHomeAt.Format("15:04"))),
+			c.Brown(t.Pause),
+			c.Bold(c.Red("after cut off!")),
+		)
+	} else {
+		fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
+			c.Bold(c.Cyan(t.GoHomeAt.Format("15:04"))),
+			c.Brown(t.Pause),
+		)
+	}
 
 	if t.GoHomeIn.Minutes() >= 0 {
 		fmt.Fprintf(w, "...that's in\t %s\n", c.Bold(c.Cyan(printDuration(t.GoHomeIn))))
