@@ -9,6 +9,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/danielb42/goat"
 	c "github.com/logrusorgru/aurora"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -19,6 +20,7 @@ type timestruct struct {
 	StartTime              time.Time     `yaml:"StartTime"`
 	GoHomeAt, GoHomeLatest time.Time     `yaml:"-"`
 	GoHomeIn, GoLatestIn   time.Duration `yaml:"-"`
+	AtJobID                int           `yaml:"AtJobID"`
 }
 
 func newTimestruct() *timestruct {
@@ -119,6 +121,9 @@ func (t *timestruct) calculate() {
 
 	t.GoHomeIn = time.Until(t.GoHomeAt)
 	t.GoLatestIn = time.Until(t.GoHomeLatest)
+
+	goat.RemoveJob(t.AtJobID)
+	t.AtJobID, _ = goat.AddJob("notify-send -i error 'Go home!'", t.GoHomeAt)
 }
 
 func (t *timestruct) print() {
