@@ -7,7 +7,6 @@ import (
 func main() {
 	wf.Alias("s", "start", "start time (hh:mm)")
 	wf.Alias("p", "pause", "duration of break(s) in min.")
-	wf.Alias("o", "offset", "time you need from door to booting your pc in min.")
 	wf.Alias("r", "reset", "reset the timefile")
 	wf.ParseCommandLine()
 
@@ -33,14 +32,7 @@ func main() {
 		timeStruct.setPause(60)
 	}
 
-	if wf.CheckInt("offset") {
-		timeStruct.setOffset(wf.GetInt("offset"))
-	} else if !timeStruct.timeFileisOfToday() {
-		timeStruct.setOffset(3)
-	}
-
-	timeStruct.store()
-
-	timeStruct.calculateDeadlines()
+	timeStruct.calculate()
 	timeStruct.print()
+	timeStruct.store()
 }

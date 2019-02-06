@@ -16,7 +16,6 @@ import (
 type timestruct struct {
 	TimefilePath           string        `yaml:"-"`
 	Pause                  int           `yaml:"Pause"`
-	Offset                 int           `yaml:"Offset"`
 	StartTime              time.Time     `yaml:"StartTime"`
 	GoHomeAt, GoHomeLatest time.Time     `yaml:"-"`
 	GoHomeIn, GoLatestIn   time.Duration `yaml:"-"`
@@ -49,10 +48,6 @@ func (t *timestruct) setPause(pause int) {
 	} else {
 		t.Pause = pause
 	}
-}
-
-func (t *timestruct) setOffset(offset int) {
-	t.Offset = offset
 }
 
 func (t *timestruct) store() {
@@ -111,8 +106,7 @@ func (t *timestruct) remove() {
 	os.Exit(0)
 }
 
-func (t *timestruct) calculateDeadlines() {
-	t.StartTime = t.StartTime.Add(time.Duration(t.Offset*-1) * time.Minute)
+func (t *timestruct) calculate() {
 	t.GoHomeAt = t.StartTime.Add(8 * time.Hour).Add(time.Duration(t.Pause) * time.Minute)
 	t.GoHomeLatest = t.StartTime.Add(10 * time.Hour).Add(longer(45, t.Pause) * time.Minute)
 
@@ -130,8 +124,7 @@ func (t *timestruct) calculateDeadlines() {
 func (t *timestruct) print() {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.AlignRight)
 
-	fmt.Fprintf(w, "started work at\t %s", c.Bold(c.Gray(t.StartTime.Format("15:04"))))
-	fmt.Fprintf(w, " (includes %d min. offset)\n\n", c.Bold(t.Offset))
+	fmt.Fprintf(w, "started work at\t %s\n\n", c.Bold(c.Gray(t.StartTime.Format("15:04"))))
 
 	if t.GoHomeAt.Hour() >= 21 || t.GoHomeAt.Day() != t.StartTime.Day() {
 		fmt.Fprintf(w, "day complete at\t %s (includes %d min. break) %s\n",
