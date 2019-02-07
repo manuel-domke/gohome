@@ -14,6 +14,8 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+var p *persistentData
+
 type timestruct struct {
 	TimefilePath           string        `yaml:"-"`
 	Pause                  int           `yaml:"Pause"`
@@ -23,7 +25,14 @@ type timestruct struct {
 	AtJobID                int           `yaml:"AtJobID"`
 }
 
+type persistentData struct {
+	DailyHours int `yaml:"DailyHours"`
+}
+
 func newTimestruct() *timestruct {
+	p = new(persistentData)
+	p.readPersistentFile()
+
 	ts := new(timestruct)
 	ts.TimefilePath = os.Getenv("HOME") + "/.gohome"
 	return ts
@@ -109,7 +118,7 @@ func (t *timestruct) remove() {
 }
 
 func (t *timestruct) calculate() {
-	t.GoHomeAt = t.StartTime.Add(8 * time.Hour).Add(time.Duration(t.Pause) * time.Minute)
+	t.GoHomeAt = t.StartTime.Add(time.Duration(p.DailyHours) * time.Hour).Add(time.Duration(t.Pause) * time.Minute)
 	t.GoHomeLatest = t.StartTime.Add(10 * time.Hour).Add(longer(45, t.Pause) * time.Minute)
 
 	if t.GoHomeLatest.Hour() >= 21 || t.GoHomeLatest.Day() != t.StartTime.Day() {
@@ -132,13 +141,15 @@ func (t *timestruct) print() {
 	fmt.Fprintf(w, "started work at\t %s\n\n", c.Bold(c.Gray(t.StartTime.Format("15:04"))))
 
 	if t.GoHomeAt.Hour() >= 21 || t.GoHomeAt.Day() != t.StartTime.Day() {
-		fmt.Fprintf(w, "day complete at\t %s (includes %d min. break) %s\n",
+		fmt.Fprintf(w, "%d-hour day complete at\t %s (includes %d min. break) %s\n",
+			p.DailyHours,
 			c.Bold(c.Red(t.GoHomeAt.Format("15:04"))),
 			c.Brown(t.Pause),
 			c.Bold(c.Red("after cut off!")),
 		)
 	} else {
-		fmt.Fprintf(w, "day complete at\t %s (includes %d min. break)\n",
+		fmt.Fprintf(w, "%d-hour day complete at\t %s (includes %d min. break)\n",
+			p.DailyHours,
 			c.Bold(c.Cyan(t.GoHomeAt.Format("15:04"))),
 			c.Brown(t.Pause),
 		)
@@ -159,6 +170,22 @@ func (t *timestruct) print() {
 	}
 
 	if err := w.Flush(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (p *persistentData) readPersistentFile() {
+	persistentFileContent, err := ioutil.ReadFile(os.Getenv("HOME") + "/.gohome_persistent")
+	if err != nil {
+		if os.IsNotExist(err) {
+			p.DailyHours = 8
+			return
+		}
+
+		log.Fatal(err)
+	}
+
+	if err = yaml.Unmarshal(persistentFileContent, &p); err != nil {
 		log.Fatal(err)
 	}
 }
