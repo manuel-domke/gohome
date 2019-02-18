@@ -20,13 +20,15 @@ func getResumeTimeFromJournal() string {
 	}
 
 	journal := fmt.Sprintf("%s", stdout)
-
 	scanner := bufio.NewScanner(strings.NewReader(journal))
+
 	for scanner.Scan() {
-		startTime, err = time.Parse("2006-01-02T15:04:05-0700", scanner.Text()[:24])
-		if err == nil && isAfter0630(startTime) {
-			success = true
-			break
+		if len(scanner.Text()) >= 24 {
+			startTime, err = time.Parse("2006-01-02T15:04:05-0700", scanner.Text()[:24])
+			if err == nil && isAfter0630(startTime) {
+				success = true
+				break
+			}
 		}
 	}
 
